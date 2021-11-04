@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>test_123456789.html</h1>
+    <p>Report generated on 02-Nov-2021 at 15:02:03 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.10.0", "pytest": "6.2.5"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19042-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "log": "1.0", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.5</td></tr></table>
+    <h2>Summary</h2>
+    <p>11 tests ran in 181.31 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">8 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">3 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">main.py::test_cpu</td>
+          <td class="col-duration">0.55</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_cpu():<br/>&gt;       cpu_result = CPU_test(logname, buildoption_type, hostname, port, username, password).test_content()<br/><br/>main.py:67: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;CPU_test.CPU_test object at 0x0000026443B6E310&gt;<br/><br/>    def test_content(self):<br/>    <br/>        # create SSH item<br/>        ssh = paramiko.SSHClient()<br/>        # permit connect to remote host<br/>        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())<br/>        # connect<br/>        ssh.connect(hostname=self.hostname, port=self.port, username=self.username, password=self.password)<br/>    <br/>        logging.info(&quot;\rCPU test start \r&quot;)<br/>        CPU_result = &#x27;FAIL&#x27;<br/>        stdin, stdout, stderr = ssh.exec_command(&quot;cat /proc/cpuinfo | grep &#x27;model name&#x27;&quot;)<br/>        cpu_info = stdout.read()<br/>        cpu_info_error = stderr.read()<br/>        cpu_type = cpu_info.split(&#x27;:&#x27;.encode())[-1]<br/>        # print(&quot;The CPU type on board is:&quot;,cpu_type)<br/>        stdin, stdout, stderr = ssh.exec_command(&quot;cat /proc/cpuinfo | grep process | wc -l&quot;)<br/>        cpu_num = int(stdout.read())<br/>        cpu_num_error = stderr.read()<br/>        # print(&quot;The CPU core on board is:&quot;,cpu_num)<br/>        logging.info(&quot;CPU info is:\r  &#x27;%s&#x27;\rCPU number is:\r  &#x27;%d&#x27;\r&quot; % (cpu_info, cpu_num))<br/>&gt;       if self.buildoption_type in cpu_type:<br/><span class="error">E       TypeError: a bytes-like object is required, not &#x27;str&#x27;</span><br/><br/>CPU_test.py:35: TypeError<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:CPU_test.py:23 CPU test start 
+INFO     root:CPU_test.py:34 CPU info is:  &#x27;b&#x27;model name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\nmodel name\t: Intel(R) Xeon(R) D-2177NT CPU @ 1.90GHz\n&#x27;&#x27;CPU number is:  &#x27;28&#x27;<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">main.py::test_console</td>
+          <td class="col-duration">0.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_console():<br/>        console_result = CONSOLE_test(logname, hostname, port, username, password).test_content()<br/>        if console_result == &#x27;PASS&#x27;:<br/>            logging.info(&quot;\rCONSOLE test Pass\r&quot;)<br/>            assert 1<br/>        else:<br/>            logging.warning(&quot;\rCONSOLE test Fail\r&quot;)<br/>&gt;           assert 0<br/><span class="error">E           assert 0</span><br/><br/>main.py:144: AssertionError<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:CONSOLE_test.py:22 CONSOLE test start 
+ERROR    root:CONSOLE_test.py:95 CONSOLE Test Failed, no console port detect, error code 19002 
+WARNING  root:main.py:143 CONSOLE test Fail<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">main.py::test_eth</td>
+          <td class="col-duration">0.70</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def test_eth():<br/>        eth_result = ETH_test(logname, ETHPORT, HOSTPORT, IPMIPORT, DEFGW, ETHPORT_IP,<br/>                              hostname, port, username, password).test_content()<br/>        if eth_result == &#x27;PASS&#x27;:<br/>            logging.info(&quot;\rETH test Pass\r&quot;)<br/>            assert 1<br/>        else:<br/>            logging.warning(&quot;\rETH test Fail\r&quot;)<br/>&gt;           assert 0<br/><span class="error">E           assert 0</span><br/><br/>main.py:155: AssertionError<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:ETH_test.py:43 The ETH info is:  &#x27;b&#x27;Settings for enp3s0:\n\tSupported ports: [ TP ]\n\tSupported link modes:   10baseT/Half 10baseT/Full \n\t                        100baseT/Half 100baseT/Full \n\t                        1000baseT/Full \n\tSupported pause frame use: Symmetric\n\tSupports auto-negotiation: Yes\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10baseT/Half 10baseT/Full \n\t                        100baseT/Half 100baseT/Full \n\t                        1000baseT/Full \n\tAdvertised pause frame use: Symmetric\n\tAdvertised auto-negotiation: Yes\n\tAdvertised FEC modes: Not reported\n\tSpeed: 1000Mb/s\n\tDuplex: Full\n\tPort: Twisted Pair\n\tPHYAD: 1\n\tTransceiver: internal\n\tAuto-negotiation: on\n\tMDI-X: on (auto)\n\tSupports Wake-on: pumbg\n\tWake-on: g\n\tCurrent message level: 0x00000007 (7)\n\t\t\t       drv probe link\n\tLink detected: yes\n&#x27;&#x27;
+INFO     root:ETH_test.py:44 set ipmi lan 1 ipaddr is: 10.168.1.214 
+INFO     root:ETH_test.py:45 set ipmi lan 1 netmask is: 255.255.255.0 
+INFO     root:ETH_test.py:46 set ipmi lan 1 defgw ipaddr is: 10.168.1.1 
+INFO     root:ETH_test.py:47 set enp3s0 ipaddr is: 10.168.1.215 
+INFO     root:ETH_test.py:50 The IPMI info get is:  &#x27;&#x27;ipmitool&#x27; 不是内部或外部命令，也不是可运行的程序
+或批处理文件。&#x27;
+ERROR    root:ETH_test.py:56 ETH Test fail, IPMIinfo check failed, error code 05003
+WARNING  root:main.py:154 ETH test Fail<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_vga</td>
+          <td class="col-duration">1.32</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     root:main.py:41 VGA test start 
+INFO     root:main.py:47 The user choose light, VGA Test Pass<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_eth_local</td>
+          <td class="col-duration">3.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     root:main.py:58 no package loss，network is fine<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_usb</td>
+          <td class="col-duration">1.89</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:USB_test.py:22 USB test start 
+INFO     root:USB_test.py:45 Mouse info is:  &#x27;b&#x27;Bus 001 Device 008: ID 046b:ff10 American Megatrends, Inc. Virtual Keyboard and Mouse\n  idProduct          0xff10 Virtual Keyboard and Mouse\n  iProduct                2 Virtual Keyboard and Mouse\n      bInterfaceProtocol      2 Mouse\n      iInterface              4 Mouse Interface\n      bInterfaceProtocol      2 Mouse\n&#x27;&#x27;Keyboard info is:  &#x27;b&#x27;Bus 001 Device 008: ID 046b:ff10 American Megatrends, Inc. Virtual Keyboard and Mouse\n  idProduct          0xff10 Virtual Keyboard and Mouse\n  iProduct                2 Virtual Keyboard and Mouse\n      bInterfaceProtocol      1 Keyboard\n      iInterface              3 Keyboard Interface\n      bInterfaceProtocol      1 Keyboard\n&#x27;&#x27;USB info is:  &#x27;b&#x27;      bInterfaceProtocol     80 Bulk-Only\n&#x27;&#x27;
+INFO     root:USB_test.py:60 USB Test Pass
+INFO     root:main.py:79 USB test Pass<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_pcie</td>
+          <td class="col-duration">1.30</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:PCIE_test.py:21 PCIE test start 
+INFO     root:PCIE_test.py:50 PCIE Ethernet info is:  &#x27;b&#x27;03:00.0 Ethernet controller: Intel Corporation I210 Gigabit Network Connection (rev 03)\n&#x27;&#x27;PCIE chip info is:  &#x27;b&#x27;04:00.0 PCI bridge: ASPEED Technology, Inc. AST1150 PCI-to-PCI Bridge (rev 04)\n&#x27;&#x27;pcie external graphic card is:  &#x27;b&#x27;17:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Caicos [Radeon HD 6450/7450/8450 / R5 230 OEM]\n17:00.1 Audio device: Advanced Micro Devices, Inc. [AMD/ATI] Caicos HDMI Audio [Radeon HD 6450 / 7450/8450/8490 OEM / R5 230/235/235X OEM]\n65:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Caicos [Radeon HD 6450/7450/8450 / R5 230 OEM]\n65:00.1 Audio device: Advanced Micro Devices, Inc. [AMD/ATI] Caicos HDMI Audio [Radeon HD 6450 / 7450/8450/8490 OEM / R5 230/235/235X OEM]\n&#x27;&#x27;PCIEX Ethernet Value is:  &#x27;b&#x27;&#x27;&#x27;PCIE chip value is:  &#x27;b&#x27;\t\tLnkCap:\tPort #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s &lt;2us, L1 &lt;16us\n\t\tLnkSta:\tSpeed 2.5GT/s, Width x1, TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-\n&#x27;&#x27;pcie 1st external card value is:  &#x27;b&#x27;\t\tLnkCap:\tPort #0, Speed 5GT/s, Width x16, ASPM L0s L1, Exit Latency L0s &lt;64ns, L1 &lt;1us\n\t\tLnkSta:\tSpeed 2.5GT/s, Width x16, TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-\n&#x27;&#x27;pcie 2nd external card value is:  &#x27;b&#x27;\t\tLnkCap:\tPort #0, Speed 5GT/s, Width x16, ASPM L0s L1, Exit Latency L0s &lt;64ns, L1 &lt;1us\n\t\tLnkSta:\tSpeed 2.5GT/s, Width x16, TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-\n&#x27;&#x27;
+INFO     root:PCIE_test.py:69 Pcie Test Pass
+INFO     root:main.py:89 PCIE test Pass<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_sata</td>
+          <td class="col-duration">0.54</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:SATA_test.py:21 SATA test start 
+INFO     root:SATA_test.py:36 SATA test Pass
+INFO     root:main.py:99 SATA test Pass<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_sfp</td>
+          <td class="col-duration">170.45</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:SFP_test.py:25 SFP test start 
+INFO     root:SFP_test.py:30 SFP port1 info is:   &#x27;b&#x27;Settings for enp184s0f0:\n\tSupported ports: [ FIBRE ]\n\tSupported link modes:   10000baseT/Full \n\tSupported pause frame use: Symmetric\n\tSupports auto-negotiation: No\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10000baseT/Full \n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: No\n\tAdvertised FEC modes: Not reported\n\tSpeed: 10000Mb/s\n\tDuplex: Full\n\tPort: Direct Attach Copper\n\tPHYAD: 0\n\tTransceiver: internal\n\tAuto-negotiation: off\n\tSupports Wake-on: g\n\tWake-on: g\n\tCurrent message level: 0x00000007 (7)\n\t\t\t       drv probe link\n\tLink detected: yes\n&#x27;&#x27;
+INFO     root:SFP_test.py:33 SFP port2 info is:   &#x27;b&#x27;Settings for enp184s0f1:\n\tSupported ports: [ FIBRE ]\n\tSupported link modes:   10000baseT/Full \n\tSupported pause frame use: Symmetric\n\tSupports auto-negotiation: No\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10000baseT/Full \n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: No\n\tAdvertised FEC modes: Not reported\n\tSpeed: 10000Mb/s\n\tDuplex: Full\n\tPort: Direct Attach Copper\n\tPHYAD: 0\n\tTransceiver: internal\n\tAuto-negotiation: off\n\tSupports Wake-on: g\n\tWake-on: g\n\tCurrent message level: 0x00000007 (7)\n\t\t\t       drv probe link\n\tLink detected: yes\n&#x27;&#x27;
+INFO     root:SFP_test.py:36 SFP port3 info is:   &#x27;b&#x27;Settings for enp184s0f2:\n\tSupported ports: [ FIBRE ]\n\tSupported link modes:   10000baseT/Full \n\tSupported pause frame use: Symmetric\n\tSupports auto-negotiation: No\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10000baseT/Full \n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: No\n\tAdvertised FEC modes: Not reported\n\tSpeed: 10000Mb/s\n\tDuplex: Full\n\tPort: Direct Attach Copper\n\tPHYAD: 0\n\tTransceiver: internal\n\tAuto-negotiation: off\n\tSupports Wake-on: g\n\tWake-on: g\n\tCurrent message level: 0x00000007 (7)\n\t\t\t       drv probe link\n\tLink detected: yes\n&#x27;&#x27;
+INFO     root:SFP_test.py:39 SFP port4 info is:   &#x27;b&#x27;Settings for enp184s0f3:\n\tSupported ports: [ FIBRE ]\n\tSupported link modes:   10000baseT/Full \n\tSupported pause frame use: Symmetric\n\tSupports auto-negotiation: No\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10000baseT/Full \n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: No\n\tAdvertised FEC modes: Not reported\n\tSpeed: 10000Mb/s\n\tDuplex: Full\n\tPort: Direct Attach Copper\n\tPHYAD: 0\n\tTransceiver: internal\n\tAuto-negotiation: off\n\tSupports Wake-on: g\n\tWake-on: g\n\tCurrent message level: 0x00000007 (7)\n\t\t\t       drv probe link\n\tLink detected: yes\n&#x27;&#x27;
+INFO     root:SFP_test.py:72 the &#x27;1&#x27; upper SFP ping info is:   &#x27;b&#x27;PING 192.168.1.30 (192.168.1.30) from 192.168.1.31 : 56(84) bytes of data.\n64 bytes from 192.168.1.30: icmp_seq=1 ttl=64 time=0.385 ms\n64 bytes from 192.168.1.30: icmp_seq=2 ttl=64 time=0.207 ms\n64 bytes from 192.168.1.30: icmp_seq=3 ttl=64 time=0.150 ms\n64 bytes from 192.168.1.30: icmp_seq=4 ttl=64 time=0.157 ms\n64 bytes from 192.168.1.30: icmp_seq=5 ttl=64 time=0.200 ms\n64 bytes from 192.168.1.30: icmp_seq=6 ttl=64 time=0.196 ms\n64 bytes from 192.168.1.30: icmp_seq=7 ttl=64 time=0.196 ms\n64 bytes from 192.168.1.30: icmp_seq=8 ttl=64 time=0.152 ms\n64 bytes from 192.168.1.30: icmp_seq=9 ttl=64 time=0.198 ms\n64 bytes from 192.168.1.30: icmp_seq=10 ttl=64 time=0.198 ms\n64 bytes from 192.168.1.30: icmp_seq=11 ttl=64 time=0.195 ms\n64 bytes from 192.168.1.30: icmp_seq=12 ttl=64 time=0.184 ms\n64 bytes from 192.168.1.30: icmp_seq=13 ttl=64 time=0.198 ms\n64 bytes from 192.168.1.30: icmp_seq=14 ttl=64 time=0.199 ms\n64 bytes from 192.168.1.30: icmp_seq=15 ttl=64 time=0.199 ms\n\n--- 192.168.1.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14024ms\nrtt min/avg/max/mdev = 0.150/0.200/0.385/0.055 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:75 the &#x27;1&#x27; under SFP ping info is:   &#x27;b&#x27;PING 192.168.2.30 (192.168.2.30) from 192.168.2.31 : 56(84) bytes of data.\n64 bytes from 192.168.2.30: icmp_seq=1 ttl=64 time=0.198 ms\n64 bytes from 192.168.2.30: icmp_seq=2 ttl=64 time=0.070 ms\n64 bytes from 192.168.2.30: icmp_seq=3 ttl=64 time=0.070 ms\n64 bytes from 192.168.2.30: icmp_seq=4 ttl=64 time=0.063 ms\n64 bytes from 192.168.2.30: icmp_seq=5 ttl=64 time=0.207 ms\n64 bytes from 192.168.2.30: icmp_seq=6 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=7 ttl=64 time=0.207 ms\n64 bytes from 192.168.2.30: icmp_seq=8 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=9 ttl=64 time=0.212 ms\n64 bytes from 192.168.2.30: icmp_seq=10 ttl=64 time=0.156 ms\n64 bytes from 192.168.2.30: icmp_seq=11 ttl=64 time=0.208 ms\n64 bytes from 192.168.2.30: icmp_seq=12 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=13 ttl=64 time=0.155 ms\n64 bytes from 192.168.2.30: icmp_seq=14 ttl=64 time=0.205 ms\n64 bytes from 192.168.2.30: icmp_seq=15 ttl=64 time=0.150 ms\n\n--- 192.168.2.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14017ms\nrtt min/avg/max/mdev = 0.063/0.157/0.212/0.051 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:72 the &#x27;2&#x27; upper SFP ping info is:   &#x27;b&#x27;PING 192.168.1.30 (192.168.1.30) from 192.168.1.31 : 56(84) bytes of data.\n64 bytes from 192.168.1.30: icmp_seq=1 ttl=64 time=0.123 ms\n64 bytes from 192.168.1.30: icmp_seq=2 ttl=64 time=0.071 ms\n64 bytes from 192.168.1.30: icmp_seq=3 ttl=64 time=0.064 ms\n64 bytes from 192.168.1.30: icmp_seq=4 ttl=64 time=0.066 ms\n64 bytes from 192.168.1.30: icmp_seq=5 ttl=64 time=0.071 ms\n64 bytes from 192.168.1.30: icmp_seq=6 ttl=64 time=0.073 ms\n64 bytes from 192.168.1.30: icmp_seq=7 ttl=64 time=0.106 ms\n64 bytes from 192.168.1.30: icmp_seq=8 ttl=64 time=0.096 ms\n64 bytes from 192.168.1.30: icmp_seq=9 ttl=64 time=0.068 ms\n64 bytes from 192.168.1.30: icmp_seq=10 ttl=64 time=0.069 ms\n64 bytes from 192.168.1.30: icmp_seq=11 ttl=64 time=0.067 ms\n64 bytes from 192.168.1.30: icmp_seq=12 ttl=64 time=0.146 ms\n64 bytes from 192.168.1.30: icmp_seq=13 ttl=64 time=0.138 ms\n64 bytes from 192.168.1.30: icmp_seq=14 ttl=64 time=0.152 ms\n64 bytes from 192.168.1.30: icmp_seq=15 ttl=64 time=0.197 ms\n\n--- 192.168.1.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14018ms\nrtt min/avg/max/mdev = 0.064/0.100/0.197/0.041 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:75 the &#x27;2&#x27; under SFP ping info is:   &#x27;b&#x27;PING 192.168.2.30 (192.168.2.30) from 192.168.2.31 : 56(84) bytes of data.\n64 bytes from 192.168.2.30: icmp_seq=1 ttl=64 time=0.111 ms\n64 bytes from 192.168.2.30: icmp_seq=2 ttl=64 time=0.066 ms\n64 bytes from 192.168.2.30: icmp_seq=3 ttl=64 time=0.055 ms\n64 bytes from 192.168.2.30: icmp_seq=4 ttl=64 time=0.156 ms\n64 bytes from 192.168.2.30: icmp_seq=5 ttl=64 time=0.183 ms\n64 bytes from 192.168.2.30: icmp_seq=6 ttl=64 time=0.168 ms\n64 bytes from 192.168.2.30: icmp_seq=7 ttl=64 time=0.218 ms\n64 bytes from 192.168.2.30: icmp_seq=8 ttl=64 time=0.152 ms\n64 bytes from 192.168.2.30: icmp_seq=9 ttl=64 time=0.211 ms\n64 bytes from 192.168.2.30: icmp_seq=10 ttl=64 time=0.149 ms\n64 bytes from 192.168.2.30: icmp_seq=11 ttl=64 time=0.138 ms\n64 bytes from 192.168.2.30: icmp_seq=12 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=13 ttl=64 time=0.212 ms\n64 bytes from 192.168.2.30: icmp_seq=14 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=15 ttl=64 time=0.165 ms\n\n--- 192.168.2.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14014ms\nrtt min/avg/max/mdev = 0.055/0.152/0.218/0.048 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:72 the &#x27;3&#x27; upper SFP ping info is:   &#x27;b&#x27;PING 192.168.1.30 (192.168.1.30) from 192.168.1.31 : 56(84) bytes of data.\n64 bytes from 192.168.1.30: icmp_seq=1 ttl=64 time=0.115 ms\n64 bytes from 192.168.1.30: icmp_seq=2 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=3 ttl=64 time=0.061 ms\n64 bytes from 192.168.1.30: icmp_seq=4 ttl=64 time=0.048 ms\n64 bytes from 192.168.1.30: icmp_seq=5 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=6 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=7 ttl=64 time=0.069 ms\n64 bytes from 192.168.1.30: icmp_seq=8 ttl=64 time=1.36 ms\n64 bytes from 192.168.1.30: icmp_seq=9 ttl=64 time=0.124 ms\n64 bytes from 192.168.1.30: icmp_seq=10 ttl=64 time=0.121 ms\n64 bytes from 192.168.1.30: icmp_seq=11 ttl=64 time=0.120 ms\n64 bytes from 192.168.1.30: icmp_seq=12 ttl=64 time=0.154 ms\n64 bytes from 192.168.1.30: icmp_seq=13 ttl=64 time=0.149 ms\n64 bytes from 192.168.1.30: icmp_seq=14 ttl=64 time=0.152 ms\n64 bytes from 192.168.1.30: icmp_seq=15 ttl=64 time=0.151 ms\n\n--- 192.168.1.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14021ms\nrtt min/avg/max/mdev = 0.048/0.189/1.365/0.316 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:75 the &#x27;3&#x27; under SFP ping info is:   &#x27;b&#x27;PING 192.168.2.30 (192.168.2.30) from 192.168.2.31 : 56(84) bytes of data.\n64 bytes from 192.168.2.30: icmp_seq=1 ttl=64 time=0.120 ms\n64 bytes from 192.168.2.30: icmp_seq=2 ttl=64 time=0.071 ms\n64 bytes from 192.168.2.30: icmp_seq=3 ttl=64 time=0.053 ms\n64 bytes from 192.168.2.30: icmp_seq=4 ttl=64 time=0.215 ms\n64 bytes from 192.168.2.30: icmp_seq=5 ttl=64 time=0.157 ms\n64 bytes from 192.168.2.30: icmp_seq=6 ttl=64 time=0.213 ms\n64 bytes from 192.168.2.30: icmp_seq=7 ttl=64 time=0.160 ms\n64 bytes from 192.168.2.30: icmp_seq=8 ttl=64 time=0.189 ms\n64 bytes from 192.168.2.30: icmp_seq=9 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=10 ttl=64 time=0.208 ms\n64 bytes from 192.168.2.30: icmp_seq=11 ttl=64 time=0.155 ms\n64 bytes from 192.168.2.30: icmp_seq=12 ttl=64 time=0.211 ms\n64 bytes from 192.168.2.30: icmp_seq=13 ttl=64 time=0.156 ms\n64 bytes from 192.168.2.30: icmp_seq=14 ttl=64 time=0.217 ms\n64 bytes from 192.168.2.30: icmp_seq=15 ttl=64 time=0.152 ms\n\n--- 192.168.2.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14021ms\nrtt min/avg/max/mdev = 0.053/0.162/0.217/0.048 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:72 the &#x27;4&#x27; upper SFP ping info is:   &#x27;b&#x27;PING 192.168.1.30 (192.168.1.30) from 192.168.1.31 : 56(84) bytes of data.\n64 bytes from 192.168.1.30: icmp_seq=1 ttl=64 time=0.108 ms\n64 bytes from 192.168.1.30: icmp_seq=2 ttl=64 time=0.067 ms\n64 bytes from 192.168.1.30: icmp_seq=3 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=4 ttl=64 time=0.073 ms\n64 bytes from 192.168.1.30: icmp_seq=5 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=6 ttl=64 time=0.068 ms\n64 bytes from 192.168.1.30: icmp_seq=7 ttl=64 time=0.069 ms\n64 bytes from 192.168.1.30: icmp_seq=8 ttl=64 time=0.071 ms\n64 bytes from 192.168.1.30: icmp_seq=9 ttl=64 time=0.068 ms\n64 bytes from 192.168.1.30: icmp_seq=10 ttl=64 time=0.095 ms\n64 bytes from 192.168.1.30: icmp_seq=11 ttl=64 time=0.111 ms\n64 bytes from 192.168.1.30: icmp_seq=12 ttl=64 time=0.156 ms\n64 bytes from 192.168.1.30: icmp_seq=13 ttl=64 time=0.197 ms\n64 bytes from 192.168.1.30: icmp_seq=14 ttl=64 time=0.199 ms\n64 bytes from 192.168.1.30: icmp_seq=15 ttl=64 time=0.196 ms\n\n--- 192.168.1.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14024ms\nrtt min/avg/max/mdev = 0.067/0.107/0.199/0.052 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:75 the &#x27;4&#x27; under SFP ping info is:   &#x27;b&#x27;PING 192.168.2.30 (192.168.2.30) from 192.168.2.31 : 56(84) bytes of data.\n64 bytes from 192.168.2.30: icmp_seq=1 ttl=64 time=0.108 ms\n64 bytes from 192.168.2.30: icmp_seq=2 ttl=64 time=0.069 ms\n64 bytes from 192.168.2.30: icmp_seq=3 ttl=64 time=0.141 ms\n64 bytes from 192.168.2.30: icmp_seq=4 ttl=64 time=0.133 ms\n64 bytes from 192.168.2.30: icmp_seq=5 ttl=64 time=0.128 ms\n64 bytes from 192.168.2.30: icmp_seq=6 ttl=64 time=0.132 ms\n64 bytes from 192.168.2.30: icmp_seq=7 ttl=64 time=0.189 ms\n64 bytes from 192.168.2.30: icmp_seq=8 ttl=64 time=0.157 ms\n64 bytes from 192.168.2.30: icmp_seq=9 ttl=64 time=0.227 ms\n64 bytes from 192.168.2.30: icmp_seq=10 ttl=64 time=0.155 ms\n64 bytes from 192.168.2.30: icmp_seq=11 ttl=64 time=0.187 ms\n64 bytes from 192.168.2.30: icmp_seq=12 ttl=64 time=0.157 ms\n64 bytes from 192.168.2.30: icmp_seq=13 ttl=64 time=0.202 ms\n64 bytes from 192.168.2.30: icmp_seq=14 ttl=64 time=0.154 ms\n64 bytes from 192.168.2.30: icmp_seq=15 ttl=64 time=0.209 ms\n\n--- 192.168.2.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14012ms\nrtt min/avg/max/mdev = 0.069/0.156/0.227/0.042 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:72 the &#x27;5&#x27; upper SFP ping info is:   &#x27;b&#x27;PING 192.168.1.30 (192.168.1.30) from 192.168.1.31 : 56(84) bytes of data.\n64 bytes from 192.168.1.30: icmp_seq=1 ttl=64 time=0.117 ms\n64 bytes from 192.168.1.30: icmp_seq=2 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=3 ttl=64 time=0.129 ms\n64 bytes from 192.168.1.30: icmp_seq=4 ttl=64 time=0.155 ms\n64 bytes from 192.168.1.30: icmp_seq=5 ttl=64 time=0.155 ms\n64 bytes from 192.168.1.30: icmp_seq=6 ttl=64 time=0.151 ms\n64 bytes from 192.168.1.30: icmp_seq=7 ttl=64 time=0.153 ms\n64 bytes from 192.168.1.30: icmp_seq=8 ttl=64 time=0.196 ms\n64 bytes from 192.168.1.30: icmp_seq=9 ttl=64 time=0.197 ms\n64 bytes from 192.168.1.30: icmp_seq=10 ttl=64 time=0.199 ms\n64 bytes from 192.168.1.30: icmp_seq=11 ttl=64 time=0.198 ms\n64 bytes from 192.168.1.30: icmp_seq=12 ttl=64 time=0.196 ms\n64 bytes from 192.168.1.30: icmp_seq=13 ttl=64 time=0.201 ms\n64 bytes from 192.168.1.30: icmp_seq=14 ttl=64 time=0.198 ms\n64 bytes from 192.168.1.30: icmp_seq=15 ttl=64 time=0.203 ms\n\n--- 192.168.1.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14020ms\nrtt min/avg/max/mdev = 0.070/0.167/0.203/0.041 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:75 the &#x27;5&#x27; under SFP ping info is:   &#x27;b&#x27;PING 192.168.2.30 (192.168.2.30) from 192.168.2.31 : 56(84) bytes of data.\n64 bytes from 192.168.2.30: icmp_seq=1 ttl=64 time=0.111 ms\n64 bytes from 192.168.2.30: icmp_seq=2 ttl=64 time=0.078 ms\n64 bytes from 192.168.2.30: icmp_seq=3 ttl=64 time=0.065 ms\n64 bytes from 192.168.2.30: icmp_seq=4 ttl=64 time=0.050 ms\n64 bytes from 192.168.2.30: icmp_seq=5 ttl=64 time=0.057 ms\n64 bytes from 192.168.2.30: icmp_seq=6 ttl=64 time=0.046 ms\n64 bytes from 192.168.2.30: icmp_seq=7 ttl=64 time=0.050 ms\n64 bytes from 192.168.2.30: icmp_seq=8 ttl=64 time=0.045 ms\n64 bytes from 192.168.2.30: icmp_seq=9 ttl=64 time=0.048 ms\n64 bytes from 192.168.2.30: icmp_seq=10 ttl=64 time=0.202 ms\n64 bytes from 192.168.2.30: icmp_seq=11 ttl=64 time=0.170 ms\n64 bytes from 192.168.2.30: icmp_seq=12 ttl=64 time=0.154 ms\n64 bytes from 192.168.2.30: icmp_seq=13 ttl=64 time=0.209 ms\n64 bytes from 192.168.2.30: icmp_seq=14 ttl=64 time=0.156 ms\n64 bytes from 192.168.2.30: icmp_seq=15 ttl=64 time=0.203 ms\n\n--- 192.168.2.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14014ms\nrtt min/avg/max/mdev = 0.045/0.109/0.209/0.064 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:72 the &#x27;6&#x27; upper SFP ping info is:   &#x27;b&#x27;PING 192.168.1.30 (192.168.1.30) from 192.168.1.31 : 56(84) bytes of data.\n64 bytes from 192.168.1.30: icmp_seq=1 ttl=64 time=0.116 ms\n64 bytes from 192.168.1.30: icmp_seq=2 ttl=64 time=0.067 ms\n64 bytes from 192.168.1.30: icmp_seq=3 ttl=64 time=0.056 ms\n64 bytes from 192.168.1.30: icmp_seq=4 ttl=64 time=0.068 ms\n64 bytes from 192.168.1.30: icmp_seq=5 ttl=64 time=0.068 ms\n64 bytes from 192.168.1.30: icmp_seq=6 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=7 ttl=64 time=0.070 ms\n64 bytes from 192.168.1.30: icmp_seq=8 ttl=64 time=0.071 ms\n64 bytes from 192.168.1.30: icmp_seq=9 ttl=64 time=0.072 ms\n64 bytes from 192.168.1.30: icmp_seq=10 ttl=64 time=0.122 ms\n64 bytes from 192.168.1.30: icmp_seq=11 ttl=64 time=0.119 ms\n64 bytes from 192.168.1.30: icmp_seq=12 ttl=64 time=0.197 ms\n64 bytes from 192.168.1.30: icmp_seq=13 ttl=64 time=0.115 ms\n64 bytes from 192.168.1.30: icmp_seq=14 ttl=64 time=0.180 ms\n64 bytes from 192.168.1.30: icmp_seq=15 ttl=64 time=0.198 ms\n\n--- 192.168.1.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14023ms\nrtt min/avg/max/mdev = 0.056/0.105/0.198/0.050 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:75 the &#x27;6&#x27; under SFP ping info is:   &#x27;b&#x27;PING 192.168.2.30 (192.168.2.30) from 192.168.2.31 : 56(84) bytes of data.\n64 bytes from 192.168.2.30: icmp_seq=1 ttl=64 time=0.124 ms\n64 bytes from 192.168.2.30: icmp_seq=2 ttl=64 time=0.073 ms\n64 bytes from 192.168.2.30: icmp_seq=3 ttl=64 time=0.209 ms\n64 bytes from 192.168.2.30: icmp_seq=4 ttl=64 time=0.177 ms\n64 bytes from 192.168.2.30: icmp_seq=5 ttl=64 time=0.202 ms\n64 bytes from 192.168.2.30: icmp_seq=6 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=7 ttl=64 time=0.207 ms\n64 bytes from 192.168.2.30: icmp_seq=8 ttl=64 time=0.157 ms\n64 bytes from 192.168.2.30: icmp_seq=9 ttl=64 time=0.209 ms\n64 bytes from 192.168.2.30: icmp_seq=10 ttl=64 time=0.153 ms\n64 bytes from 192.168.2.30: icmp_seq=11 ttl=64 time=0.208 ms\n64 bytes from 192.168.2.30: icmp_seq=12 ttl=64 time=0.154 ms\n64 bytes from 192.168.2.30: icmp_seq=13 ttl=64 time=0.188 ms\n64 bytes from 192.168.2.30: icmp_seq=14 ttl=64 time=0.155 ms\n64 bytes from 192.168.2.30: icmp_seq=15 ttl=64 time=0.209 ms\n\n--- 192.168.2.30 ping statistics ---\n15 packets transmitted, 15 received, 0% packet loss, time 14015ms\nrtt min/avg/max/mdev = 0.073/0.171/0.209/0.041 ms\n&#x27;&#x27;
+INFO     root:SFP_test.py:93 SFP Test Pass
+INFO     root:main.py:110 SFP test Pass<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_ssd</td>
+          <td class="col-duration">0.66</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:SSD_test.py:20 M.2 test start 
+INFO     root:SSD_test.py:25 The disk info is:  &#x27;b&#x27;\nDisk /dev/sda: 120.0 GB, 120034123776 bytes, 234441648 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\n\n\nDisk /dev/sdb: 120.0 GB, 120034123776 bytes, 234441648 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\nDisk label type: dos\nDisk identifier: 0x00093432\n\n   Device Boot      Start         End      Blocks   Id  System\n/dev/sdb1   *        2048     2099199     1048576   83  Linux\n/dev/sdb2         2099200   250068991   123984896   8e  Linux LVM\n\nDisk /dev/sdc: 512.1 GB, 512110190592 bytes, 1000215216 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\n\n\nDisk /dev/sdd: 31.2 GB, 31205621760 bytes, 60948480 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\nDisk label type: dos\nDisk identifier: 0x00000000\n\n   Device Boot      Start         End      Blocks   Id  System\n/dev/sdd1               1    30031249    15015624+  ee  GPT\n\nDisk /dev/mapper/centos-root: 12.5 GB, 12549357568 bytes, 24510464 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\n\n\nDisk /dev/mapper/centos-swap: 1539 MB, 1539309568 bytes, 3006464 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\n\n\nDisk /dev/nvme0n1: 1024.2 GB, 1024209543168 bytes, 2000409264 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\nDisk label type: dos\nDisk identifier: 0x000c1abd\n\n        Device Boot      Start         End      Blocks   Id  System\n/dev/nvme0n1p1   *        2048     2099199     1048576   83  Linux\n/dev/nvme0n1p2         2099200   468860927   233380864   8e  Linux LVM\n\nDisk /dev/mapper/cl-swap: 8388 MB, 8388608000 bytes, 16384000 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\n\n\nDisk /dev/mapper/cl-home: 64.9 GB, 64877494272 bytes, 126713856 sectors\nUnits = sectors of 1 * 512 = 512 bytes\nSector size (logical/physical): 512 bytes / 512 bytes\nI/O size (minimum/optimal): 512 bytes / 512 bytes\n\n&#x27;&#x27;
+INFO     root:SSD_test.py:40 M.2 test Pass
+INFO     root:main.py:120 M.2 test Pass<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">main.py::test_memory</td>
+          <td class="col-duration">0.53</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     paramiko.transport:transport.py:1819 Connected (version 2.0, client OpenSSH_7.4)
+INFO     paramiko.transport:transport.py:1819 Authentication (password) successful!
+INFO     root:Memory_test.py:23 MEMORY test start 
+INFO     root:Memory_test.py:35 MEM total info is:  &#x27;b&#x27;MemTotal:       98475740 kB\n&#x27;&#x27;MEM free info is:  &#x27;b&#x27;MemFree:        95697984 kB\n&#x27;&#x27;
+INFO     root:Memory_test.py:48 Memory Test Pass
+INFO     root:main.py:130 Memory test Pass<br/></div></td></tr></tbody></table></body></html>
